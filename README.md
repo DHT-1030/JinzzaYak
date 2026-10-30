@@ -1,1 +1,1 @@
-# JinzzaYak
+# JinzzaYak(진짜약)
