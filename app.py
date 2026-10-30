@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-진짜약 (Jinzzayak) - 약 성분표 OCR 대조 앱
-requirements: streamlit>=1.40, easyocr, rapidfuzz, opencv-python-headless, pillow, pandas, numpy
-"""
 import base64
 import contextlib
 import gc
@@ -36,9 +31,7 @@ esc = html.escape
 NAME, ING, MANUF, CODE = "Product Name", "Active Ingredient", "Manufacturer", "MTRAL_CC"
 MAX_FILES = 6
 
-# =========================================================
-# 스타일
-# =========================================================
+
 CSS = """
 <style>
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
@@ -53,12 +46,12 @@ html, body, .stApp, p, div, label, input, textarea, button, table, td, th {
   letter-spacing:-0.01em;
 }
 
-/* Streamlit 기본 UI 숨김 */
+
 header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
 [data-testid="stStatusWidget"], #MainMenu, footer, .stDeployButton,
 [data-testid="InputInstructions"], [data-testid="stElementToolbar"] { display:none !important; }
 
-/* 폰 프레임 */
+
 .stApp { background:#E9ECEF; }
 .block-container, [data-testid="stMainBlockContainer"]{
   max-width:440px !important; padding:0 20px 100px !important;
@@ -67,11 +60,11 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 @media (max-width:480px){ .stApp{ background:#fff; } }
 [data-testid="stVerticalBlock"]{ gap:0.6rem; }
 
-/* 모바일에서도 컬럼이 줄바꿈되지 않게 */
+
 [data-testid="stHorizontalBlock"]{ flex-wrap:nowrap !important; gap:8px !important; }
 [data-testid="stColumn"], [data-testid="column"]{ min-width:0 !important; }
 
-/* 버튼 공통 */
+
 .stButton, .stFormSubmitButton{ width:100%; }
 .stButton > button, .stFormSubmitButton > button{
   width:100%; min-height:50px; border-radius:12px;
@@ -88,57 +81,57 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   background:var(--red-d) !important; color:#fff !important;
 }
 
-/* 검색 폼 전체 영역 */
-[data-testid="stForm"]{ 
-    border: none !important; 
-    padding: 0 !important; 
+
+[data-testid="stForm"]{
+    border: none !important;
+    padding: 0 !important;
 }
 
-/* 검색창과 버튼을 감싸는 블록: 간격(gap) 조절 가능 */
-.st-key-searchrow [data-testid="stHorizontalBlock"]{ 
+
+.st-key-searchrow [data-testid="stHorizontalBlock"]{
     display: flex !important;
-    align-items: center !important; 
-    gap: 12px !important; /* 회색박스와 빨간버튼 사이 간격 */
+    align-items: center !important;
+    gap: 12px !important;
 }
 
-/* 회색 입력창(텍스트박스) 길이와 높이 맞춤 */
+
 .stTextInput {
     width: 100% !important;
 }
 .stTextInput [data-baseweb="input"]{
-    height: 46px !important; /* 위아래 높이를 슬림하게 조절 */
-    border: 1.5px solid var(--line) !important; 
+    height: 46px !important;
+    border: 1.5px solid var(--line) !important;
     border-radius: 12px !important;
-    background: #fff !important; 
+    background: #fff !important;
     box-shadow: none !important;
     display: flex !important;
     align-items: center !important;
 }
-.stTextInput [data-baseweb="input"]:focus-within{ 
-    border-color: var(--ink) !important; 
+.stTextInput [data-baseweb="input"]:focus-within{
+    border-color: var(--ink) !important;
 }
 .stTextInput input{
-    font-size: 15px !important; 
-    color: var(--ink) !important; 
+    font-size: 15px !important;
+    color: var(--ink) !important;
     padding: 0 14px !important;
-    background: transparent !important; 
-    border: none !important; 
+    background: transparent !important;
+    border: none !important;
     outline: none !important;
 }
 .stTextInput input::placeholder{ color: #B0B8C1 !important; }
 
-/* 오른쪽 빨간색 검색 버튼: 회색 박스와 높이(46px)를 정확히 일치시킴 */
+
 .st-key-searchrow .stFormSubmitButton {
     width: auto !important;
 }
 .st-key-searchrow .stFormSubmitButton > button{
-    width: 65px !important; /* 버튼 가로 폭 */
-    min-height: 35px !important; 
-    height: 46px !important; 
+    width: 65px !important;
+    min-height: 35px !important;
+    height: 46px !important;
     border-radius: 12px !important;
-    font-size: 15px !important; 
+    font-size: 15px !important;
     font-weight: 600 !important;
-    background: var(--red) !important; 
+    background: var(--red) !important;
     color: #fff !important;
     border: none !important;
     box-shadow: none !important;
@@ -150,7 +143,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
     background: var(--red-d) !important;
 }
 
-/* 상단바: 아이콘과 글씨를 한 버튼에 넣어 정렬 */
+
 .st-key-topbar{ position:sticky; top:0; z-index:50; background:#fff; padding:10px 0 6px; }
 .st-key-topbar .stButton{ width:auto; }
 .st-key-topbar .stButton > button{
@@ -162,7 +155,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .st-key-topbar button p{ font-size:21px; font-weight:800; color:var(--ink); letter-spacing:-0.03em; line-height:1; margin:0; }
 .st-key-tb_back button p{ font-size:18px; font-weight:700; }
 
-/* 섹션 */
+
 .sec{ display:flex; justify-content:space-between; align-items:baseline; margin:12px 0 0; }
 .sec b{ font-size:15px; font-weight:700; color:var(--ink); }
 .sec small{ font-size:12px; color:var(--mute); }
@@ -175,31 +168,30 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .notice b{ color:var(--ink); display:block; font-size:16px; margin-bottom:4px; }
 .err{ background:#FFF1F1; color:var(--red-d); border-radius:12px; padding:12px 14px; font-size:14px; }
 
-/* 검색 기록 */
+
 [data-testid="stButtonGroup"] button{ border-radius:999px !important; font-size:14px; }
 .st-key-hist_clear .stButton > button{
   min-height:28px; border:none; background:transparent; color:var(--mute);
   font-size:13px; font-weight:500; justify-content:flex-end; padding:0;
 }
 
-/* 약품 목록 (위쪽 간격을 줘서 아래로 내림) */
-/* 검색된 약품 목록: 내용물 크기에 맞게 자동으로 줄어들도록 수정 */
-.st-key-reslist{ 
-    background: var(--bg); 
-    border-radius: 14px; 
-    padding: 4px 10px; 
+
+.st-key-reslist{
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 4px 10px;
     margin-top: 18px;
-    height: auto !important; 
-    max-height: 330px !important; 
+    height: auto !important;
+    max-height: 330px !important;
     overflow-y: auto !important;
 }
-.st-key-favlist{ 
-    background: var(--bg); 
-    border-radius: 14px; 
-    padding: 4px 10px; 
+.st-key-favlist{
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 4px 10px;
     margin-top: 18px;
-    height: auto !important; 
-    max-height: 330px !important; 
+    height: auto !important;
+    max-height: 330px !important;
     overflow-y: auto !important;
 }
 [class*="st-key-row_"], [class*="st-key-hrow_"]{ border-bottom:1px solid #E1E4E8; }
@@ -218,14 +210,14 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 [class*="st-key-bm_"] [data-testid="stIconMaterial"]{ font-size:22px; color:#B0B8C1; }
 [class*="st-key-bmcon_"] [data-testid="stIconMaterial"]{ color:var(--red) !important; }
 
-/* 적용된 약품 카드 */
+
 .applied{ background:var(--soft); border:1px solid var(--line); border-radius:14px; padding:12px 14px; }
 .applied .tag{ display:inline-block; font-size:11px; font-weight:700; color:var(--red);
   background:#FFECEC; border-radius:6px; padding:2px 7px; margin-bottom:5px; }
 .applied .nm{ font-size:16px; font-weight:700; color:var(--ink); line-height:1.4; }
 .applied .meta{ font-size:12.5px; color:var(--mute); margin-top:2px; line-height:1.5; }
 
-/* 업로드 박스 */
+
 [class*="st-key-upwrap"]{ margin-top:4px; }
 .st-key-upwrap{ margin-top:12px; }
 [class*="st-key-upwrap"] [data-testid="stFileUploaderDropzone"]{
@@ -243,7 +235,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 [class*="st-key-upwrap"] [data-testid="stFileUploaderFile"],
 [class*="st-key-upwrap"] [data-testid="stFileUploaderPagination"]{ display:none; }
 
-/* 업로드된 사진 (작게, X는 우측 상단) */
+
 [class*="st-key-chip_"]{ position:relative; gap:0 !important; }
 .chip img{ width:100%; aspect-ratio:1; object-fit:cover; display:block;
   border-radius:10px; border:1px solid var(--line); background:var(--bg); }
@@ -258,7 +250,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 [class*="st-key-rm_"] [data-testid="stIconMaterial"]{ font-size:14px; color:#fff; }
 
-/* 성분 비교 (빨간 테두리, 조금 더 짧게) */
+
 .st-key-btn_compare{ margin-top:6px; }
 .st-key-btn_compare, .st-key-btn_compare .stButton{ width:100% !important; display:flex; justify-content:center; }
 .st-key-btn_compare .stButton > button{
@@ -267,7 +259,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .st-key-btn_compare button p{ white-space:nowrap; }
 
-/* 분석 중 */
+
 .analyzing{ min-height:calc(100dvh - 40px); display:flex; flex-direction:column;
   align-items:center; justify-content:center; text-align:center; }
 .scanbox{ position:relative; width:200px; height:200px; border-radius:22px; overflow:hidden;
@@ -286,7 +278,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 @keyframes d3{ 0%,70%{opacity:0} 75%,100%{opacity:1} }
 .an-s{ color:var(--mute); font-size:13px; margin-top:6px; line-height:1.6; }
 
-/* 결과 */
+
 .r-title{ font-size:25px; font-weight:800; color:var(--ink); letter-spacing:-0.035em; margin:6px 0 4px; }
 .r-drug{ color:var(--mute); font-size:14px; margin-bottom:6px; }
 .r-item{ padding:18px 0; border-bottom:1px solid var(--line); }
@@ -301,7 +293,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   background:var(--bg) !important; border:none !important; color:var(--sub) !important; font-weight:500;
 }
 
-/* 리포트 표 */
+
 .rpt-h{ font-size:22px; font-weight:800; color:var(--ink); letter-spacing:-0.03em; margin:4px 0 12px; }
 .rpt{ width:100%; border-collapse:separate; border-spacing:0; border:1px solid var(--line);
   border-radius:12px; overflow:hidden; font-size:13px; table-layout:fixed; }
@@ -311,7 +303,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .rpt .pct{ display:block; font-size:11px; color:var(--mute); margin-top:2px; }
 .fine{ font-size:12px; color:var(--mute); line-height:1.6; margin-top:6px; }
 
-/* 메뉴 화면 */
+
 .st-key-drawer{ animation:fadein .2s ease-out; }
 @keyframes fadein{ from{ opacity:0; margin-left:-16px } to{ opacity:1; margin-left:0 } }
 .st-key-drawer [class*="st-key-dr_"] .stButton > button{
@@ -321,7 +313,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .st-key-drawer [class*="st-key-dr_"] button > div{ justify-content:flex-start; gap:10px; }
 .st-key-drawer [class*="st-key-dr_"] [data-testid="stIconMaterial"]{ font-size:22px; color:var(--sub); }
 
-/* 메뉴 하단 고정: 마이메뉴(왼쪽) / 설정(오른쪽) */
+
 .st-key-drawer_bottom{
   position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:440px;
   background:#fff; border-top:1px solid var(--line);
@@ -333,43 +325,40 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .st-key-db_my .stButton > button, .st-key-db_my button > div{ justify-content:flex-start; }
 .st-key-db_set .stButton > button, .st-key-db_set button > div{ justify-content:flex-end; }
 
-/* 설정 */
+
 .set-sec{ font-size:13px; color:var(--mute); font-weight:600; margin:18px 0 2px; }
 .stToggle label p{ font-size:15px; color:var(--ink); }
 
-/* 결과 화면 버튼 우측 정렬 및 크기 조절 */
-.st-key-btn_report, 
+
+.st-key-btn_report,
 [class*="st-key-light_"] {
     display: flex !important;
     justify-content: flex-end !important;
     width: 100% !important;
 }
 
-.st-key-btn_report .stButton, 
+.st-key-btn_report .stButton,
 [class*="st-key-light_"] .stButton {
     display: flex !important;
     justify-content: flex-end !important;
     width: 100% !important;
 }
 
-.st-key-btn_report .stButton > button, 
+.st-key-btn_report .stButton > button,
 [class*="st-key-light_"] .stButton > button {
     margin-left: auto !important;
     margin-right: 0 !important;
-    width: 240px !important; /* 👈 버튼의 가로 길이를 원하시는 크기로 조절하세요 */
+    width: 240px !important;
 }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
 
-# =========================================================
-# 판별 로직 (A파일 기준: rapidfuzz 점수, 75점 / 50% 규칙)
-# =========================================================
-STRICT = 90        # 제조사 점수가 이 이상이면 '검출' (리포트 참고용)
-INGR_PASS = 75     # 성분 하나가 '있다'고 인정할 점수
-INGR_RATIO = 0.5   # 성분 중 이 비율 이상 확인되어야 통과
-NAME_PASS = 75     # 제품명이 '있다'고 인정할 점수
+STRICT = 90
+INGR_PASS = 75
+INGR_RATIO = 0.5
+NAME_PASS = 75
 
 COLUMN_MAP = {"Product Name": "약품명", "Active Ingredient": "주성분",
               "Manufacturer": "제조사", "MTRAL_CC": "코드"}
@@ -389,7 +378,7 @@ def make_key(name):
 
 
 def match_score(target, texts, full):
-    """OCR 오타를 고려해서 target이 사진 속 글자에 있는지 점수(0~100)"""
+
     t = norm(target)
     if not t:
         return 0
@@ -404,7 +393,6 @@ def merge_ingr(series):
     return ", ".join(dict.fromkeys(parts))
 
 
-# 허가정보는 영문, 포장지는 한글로 적힌 경우가 많아서 같은 성분으로 봄
 _ALIAS_GROUPS = [
     ["acetaminophen", "아세트아미노펜", "paracetamol", "파라세타몰"],
     ["ibuprofen", "이부프로펜"],
@@ -450,7 +438,7 @@ _FORM_RE = re.compile(r"(필름코팅정|서방정|장용정|츄어블정|연질
 
 
 def ingr_candidates(ing):
-    """성분 하나를 비교할 여러 표기: 원래 이름, 괄호 안/밖, 함량 제거, 염 제거, 한/영 이름"""
+
     raw = str(ing)
     no_unit = _UNIT_RE.sub(" ", raw)
     inner = re.findall(r"\(([^)]*)\)", no_unit)
@@ -470,7 +458,7 @@ def ingr_candidates(ing):
 
 
 def name_candidates(name):
-    """제품명을 비교할 여러 표기: 원래 이름, 괄호/함량 제거, 제형(정·캡슐 등) 제거"""
+
     raw = str(name)
     no_paren = re.sub(r"\(.*?\)", " ", raw)
     no_unit = _UNIT_RE.sub(" ", no_paren)
@@ -486,7 +474,7 @@ def name_candidates(name):
 
 
 def best_match(cands, texts, full):
-    """여러 표기 중 가장 높은 점수와, 사진에서 가장 비슷한 글자 줄"""
+
     score = max([match_score(c, texts, full) for c in cands] + [0])
     best, line = 0, ""
     for c in cands:
@@ -502,20 +490,17 @@ _CONFUSE = str.maketrans("OoDQIil|SsBZz", "0000111155822")
 
 
 def digit_stream(text):
-    """OCR이 숫자를 문자로 잘못 읽는 경우(O->0, l->1 등)를 보정한 숫자열"""
+
     runs = re.findall(r"[0-9OoDQIil|SsBZz]{3,}", text)
     good = [r for r in runs if sum(ch.isdigit() for ch in r) >= len(r) / 2]
     return "".join(r.translate(_CONFUSE) for r in good)
 
 
 def has_code(code):
-    """품목기준코드가 비었거나 null 계열이면 False"""
+
     return str(code).strip().lower() not in ("", "nan", "null", "none", "-", "0")
 
 
-# =========================================================
-# 데이터 (A파일 load_db)
-# =========================================================
 @st.cache_data(show_spinner=False)
 def load_db(path="drugs.csv"):
     df = None
@@ -552,7 +537,7 @@ except Exception as e:
 
 
 def search_names(query, db, limit=5):
-    """오타가 있어도 비슷한 약 이름 찾기"""
+
     q = make_key(query)
     if not q:
         return []
@@ -562,7 +547,7 @@ def search_names(query, db, limit=5):
 
 
 def search_df(keyword, db):
-    """약품명 또는 성분명으로 검색 (이름이 앞부분부터 맞는 약을 먼저)"""
+
     q = norm(keyword)
     if not q:
         return db.iloc[0:0]
@@ -587,13 +572,10 @@ def search_drugs(q, limit=50):
     return [to_rec(i) for i in matched.head(limit).index], len(matched)
 
 
-# =========================================================
-# OCR (A파일 방식 + 못 읽으면 보정 사진으로 다시 읽기)
-# =========================================================
-MAX_SIDE = 2000   # 사진 최대 크기
-MIN_SIDE = 1600   # 이보다 작으면 키워서 작은 글씨도 읽히게
+MAX_SIDE = 2000
+MIN_SIDE = 1600
 MAG_RATIO = 1.0
-MIN_CONF = 0.1    # 한글은 확신도가 낮게 나와도 맞게 읽은 경우가 많음 (오타는 점수로 보정)
+MIN_CONF = 0.1
 
 
 @st.cache_resource(show_spinner=False)
@@ -605,7 +587,7 @@ def get_ocr_reader():
 
 
 def preprocess(pil_img, variant):
-    """variant 0: 원본(크기만 맞춤) / 1: 대비·선명도 보정 / 2: 그림자 제거 + 흑백"""
+
     pil_img = ImageOps.exif_transpose(pil_img)
     img = np.array(pil_img.convert("RGB"))
     h, w = img.shape[:2]
@@ -663,7 +645,7 @@ def merge_lines(merged, lines):
 
 
 def evaluate(drug, lines):
-    """제품명 + 주성분으로 판정 (제조사·코드는 리포트 참고용)"""
+
     texts = [t for t, _ in lines]
     full = norm(" ".join(texts))
 
@@ -692,9 +674,6 @@ def evaluate(drug, lines):
     }
 
 
-# =========================================================
-# 상태
-# =========================================================
 _DEFAULTS = {
     "page": "home", "prev": "home", "results": None, "total": 0,
     "applied": None, "files": [], "up_n": 0, "hist_n": 0,
@@ -826,9 +805,6 @@ def set_opt(name):
     ss[name] = ss["w_" + name]
 
 
-# =========================================================
-# 공통 UI
-# =========================================================
 def topbar(title=None, back=None):
     with st.container(key="topbar"):
         if back:
@@ -849,9 +825,6 @@ def drug_row(rec, i, prefix):
                           key="bm_%s%d" % (prefix, i), on_click=toggle_bookmark, args=(rec,))
 
 
-# =========================================================
-# 화면
-# =========================================================
 def page_home():
     topbar()
 
@@ -868,7 +841,7 @@ def page_home():
     if ss.err:
         st.markdown('<div class="err">' + esc(ss.err) + "</div>", unsafe_allow_html=True)
 
-    # 약품 적용 후: 업로드
+
     if applied:
         st.markdown(
             '<div class="applied"><span class="tag">적용되었습니다</span>'
@@ -913,7 +886,7 @@ def page_home():
 
         st.button("성분 비교", key="btn_compare", on_click=start_compare)
 
-    # 검색 후: 결과 목록
+
     elif ss.results is not None:
         if not ss.results:
             st.markdown(
@@ -933,7 +906,7 @@ def page_home():
                 for i, rec in enumerate(ss.results):
                     drug_row(rec, i, "")
 
-    # 기본: 검색 기록
+
     else:
         c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
         with c1:
@@ -998,18 +971,18 @@ def page_result():
     ing_cls = "ok" if r["ing_ok"] else "bad"
     rate_cls = "ok" if rate >= 80 else "bad"
     rate_color = "var(--green)" if rate >= 80 else "var(--red)"
-    verdict = "정품 (GENUINE)" if r["genuine"] else "가품 의심 (COUNTERFEIT)"
+    verdict = "표시 이름 검출" if r["genuine"] else "표기 확인 필요"
     v_cls = "ok" if r["genuine"] else "bad"
 
     st.markdown(
-        '<div class="r-title">성분 대조 및 판정 결과</div>'
+        '<div class="r-title">포장지 성분 표시 비교 결과</div>'
         '<div class="r-drug">' + esc(r["drug"]["name"]) + "</div>"
         '<div class="r-item"><span class="r-label">주성분 일치 여부</span>'
         '<span class="r-value ' + ing_cls + '">' + ("일치" if r["ing_ok"] else "불일치") + "</span></div>"
         '<div class="r-item"><span class="r-label">성분 일치율</span>'
         '<span class="r-value ' + rate_cls + '">%.1f%%</span>' % rate
         + '<div class="bar"><i style="width:%.0f%%;background:%s"></i></div></div>' % (min(rate, 100), rate_color)
-        + '<div class="r-item"><span class="r-label">최종 판정</span>'
+        + '<div class="r-item"><span class="r-label">표기 비교 상태</span>'
         '<span class="r-value sm ' + v_cls + '">' + verdict + "</span></div>",
         unsafe_allow_html=True,
     )
@@ -1046,8 +1019,8 @@ def page_report():
                  esc(r["manuf_found"]) if r["manuf_found"] else "미검출",
                  tag(r["manuf_score"] >= 0.8, "일치", "참고")))
     rows.append(("판정 상태", "기준 규격",
-                 '<span class="ok">✓ 적합</span>' if r["genuine"] else '<span class="bad">✕ 부적합</span>',
-                 tag(r["genuine"], "통과", "경고")))
+                 '<span class="ok">유사 표기 검출</span>' if r["genuine"] else '<span class="bad">확인 필요</span>',
+                 tag(r["genuine"], "검출", "확인 필요")))
 
     body = "".join(
         '<tr><td class="k">%s</td><td>%s</td><td>%s</td><td>%s</td></tr>' % row for row in rows
@@ -1056,7 +1029,7 @@ def page_report():
         '<div class="rpt-h">상세 항목별 대조 리포트</div>'
         '<table class="rpt"><colgroup><col style="width:22%"><col style="width:28%">'
         '<col style="width:32%"><col style="width:18%"></colgroup>'
-        "<thead><tr><th>검증 항목</th><th>기준 DB (정품)</th><th>이미지 OCR 검출값</th><th>검증 결과</th></tr></thead>"
+        "<thead><tr><th>비교 항목</th><th>등록 데이터</th><th>이미지 OCR 검출값</th><th>비교 결과</th></tr></thead>"
         "<tbody>" + body + "</tbody></table>"
         '<div class="fine">사진 속 글자 인식(OCR) 결과를 기준 데이터와 비교한 참고용 판정입니다. '
         "조명·초점에 따라 결과가 달라질 수 있으니, 의심되면 약사 또는 의약품안전나라에서 한 번 더 확인해주세요.</div>",
@@ -1105,7 +1078,7 @@ def page_mymenu():
     if not ss.analyses:
         st.markdown('<div class="empty">아직 판별한 기록이 없습니다.</div>', unsafe_allow_html=True)
     for i, r in enumerate(ss.analyses):
-        mark = "정품" if r["genuine"] else "가품 의심"
+        mark = "표기 검출" if r["genuine"] else "확인 필요"
         with st.container(key="hrow_%d" % i):
             st.button("%s  ·  %s %.0f%%  ·  %s" % (r["drug"]["name"], mark, r["rate"], r["time"]),
                       key="open_%d" % i, on_click=open_result, args=(r,))
