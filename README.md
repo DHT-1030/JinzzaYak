@@ -1,4 +1,4 @@
-# 진짜약 · JinzzaYak
+# 진짜약 JinzzaYak
 
 약품을 검색하고 포장지 사진에서 읽은 제조사·주성분을 CSV 데이터와 비교하는 Streamlit 앱입니다.
 
