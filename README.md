@@ -12,7 +12,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-브라우저에서 [http://localhost:8501](http://localhost:8501)에 접속합니다. 최초 실행 시 한국어·영어 OCR 모델을 다운로드합니다.
+브라우저에서 http://localhost:8501에 접속합니다. 최초 실행 시 한국어·영어 OCR 모델을 다운로드합니다.
 
 - `app.py`: 검색, 사진 OCR, 비교 결과, 북마크·기록
 - `drugs.csv`: 팀 제공 약품 데이터
