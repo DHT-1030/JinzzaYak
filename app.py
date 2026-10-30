@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-진짜약 (Jinzzayak) - 약 성분표 OCR 대조 앱
+진짜약 (Jinzzayak) - 기능: A파일 / 디자인(CSS): B파일
 requirements: streamlit>=1.40, easyocr, rapidfuzz, opencv-python-headless, pillow, pandas, numpy
 """
 import base64
 import contextlib
-import gc
 import html
 import io
 import logging
@@ -24,7 +23,7 @@ warnings.filterwarnings("ignore")
 logging.getLogger("easyocr").setLevel(logging.ERROR)
 
 st.set_page_config(
-    page_title="진짜약 · Jinzzayak",
+    page_title="진짜약 (Jinzzayak)",
     page_icon="💊",
     layout="centered",
     initial_sidebar_state="collapsed",
@@ -32,12 +31,10 @@ st.set_page_config(
 
 ss = st.session_state
 esc = html.escape
-
-NAME, ING, MANUF, CODE = "Product Name", "Active Ingredient", "Manufacturer", "MTRAL_CC"
 MAX_FILES = 6
 
 # =========================================================
-# 스타일
+# 스타일 (B파일 CSS 그대로)
 # =========================================================
 CSS = """
 <style>
@@ -89,15 +86,15 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 
 /* 검색 폼 전체 영역 */
-[data-testid="stForm"]{ 
-    border: none !important; 
-    padding: 0 !important; 
+[data-testid="stForm"]{
+    border: none !important;
+    padding: 0 !important;
 }
 
 /* 검색창과 버튼을 감싸는 블록: 간격(gap) 조절 가능 */
-.st-key-searchrow [data-testid="stHorizontalBlock"]{ 
+.st-key-searchrow [data-testid="stHorizontalBlock"]{
     display: flex !important;
-    align-items: center !important; 
+    align-items: center !important;
     gap: 12px !important; /* 회색박스와 빨간버튼 사이 간격 */
 }
 
@@ -107,22 +104,22 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .stTextInput [data-baseweb="input"]{
     height: 46px !important; /* 위아래 높이를 슬림하게 조절 */
-    border: 1.5px solid var(--line) !important; 
+    border: 1.5px solid var(--line) !important;
     border-radius: 12px !important;
-    background: #fff !important; 
+    background: #fff !important;
     box-shadow: none !important;
     display: flex !important;
     align-items: center !important;
 }
-.stTextInput [data-baseweb="input"]:focus-within{ 
-    border-color: var(--ink) !important; 
+.stTextInput [data-baseweb="input"]:focus-within{
+    border-color: var(--ink) !important;
 }
 .stTextInput input{
-    font-size: 15px !important; 
-    color: var(--ink) !important; 
+    font-size: 15px !important;
+    color: var(--ink) !important;
     padding: 0 14px !important;
-    background: transparent !important; 
-    border: none !important; 
+    background: transparent !important;
+    border: none !important;
     outline: none !important;
 }
 .stTextInput input::placeholder{ color: #B0B8C1 !important; }
@@ -133,12 +130,12 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .st-key-searchrow .stFormSubmitButton > button{
     width: 65px !important; /* 버튼 가로 폭 */
-    min-height: 35px !important; 
-    height: 46px !important; 
+    min-height: 35px !important;
+    height: 46px !important;
     border-radius: 12px !important;
-    font-size: 15px !important; 
+    font-size: 15px !important;
     font-weight: 600 !important;
-    background: var(--red) !important; 
+    background: var(--red) !important;
     color: #fff !important;
     border: none !important;
     box-shadow: none !important;
@@ -184,22 +181,22 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 
 /* 약품 목록 (위쪽 간격을 줘서 아래로 내림) */
 /* 검색된 약품 목록: 내용물 크기에 맞게 자동으로 줄어들도록 수정 */
-.st-key-reslist{ 
-    background: var(--bg); 
-    border-radius: 14px; 
-    padding: 4px 10px; 
+.st-key-reslist{
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 4px 10px;
     margin-top: 18px;
-    height: auto !important; 
-    max-height: 330px !important; 
+    height: auto !important;
+    max-height: 330px !important;
     overflow-y: auto !important;
 }
-.st-key-favlist{ 
-    background: var(--bg); 
-    border-radius: 14px; 
-    padding: 4px 10px; 
+.st-key-favlist{
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 4px 10px;
     margin-top: 18px;
-    height: auto !important; 
-    max-height: 330px !important; 
+    height: auto !important;
+    max-height: 330px !important;
     overflow-y: auto !important;
 }
 [class*="st-key-row_"], [class*="st-key-hrow_"]{ border-bottom:1px solid #E1E4E8; }
@@ -338,21 +335,21 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .stToggle label p{ font-size:15px; color:var(--ink); }
 
 /* 결과 화면 버튼 우측 정렬 및 크기 조절 */
-.st-key-btn_report, 
+.st-key-btn_report,
 [class*="st-key-light_"] {
     display: flex !important;
     justify-content: flex-end !important;
     width: 100% !important;
 }
 
-.st-key-btn_report .stButton, 
+.st-key-btn_report .stButton,
 [class*="st-key-light_"] .stButton {
     display: flex !important;
     justify-content: flex-end !important;
     width: 100% !important;
 }
 
-.st-key-btn_report .stButton > button, 
+.st-key-btn_report .stButton > button,
 [class*="st-key-light_"] .stButton > button {
     margin-left: auto !important;
     margin-right: 0 !important;
@@ -363,25 +360,58 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 st.markdown(CSS, unsafe_allow_html=True)
 
 
-# =========================================================
-# 판별 로직 (A파일 기준: rapidfuzz 점수, 75점 / 50% 규칙)
-# =========================================================
-STRICT = 90        # 제조사 점수가 이 이상이면 '검출' (리포트 참고용)
+# =================================================================
+# 1. OCR (사진 -> 글자)  [A파일]
+# =================================================================
+MAX_SIDE = 2000   # 사진 최대 크기 (클수록 작은 글씨를 잘 읽지만 느려짐)
+MAG_RATIO = 1.0   # 확대 비율
+
+
+@st.cache_resource(show_spinner=False)
+def load_reader():
+    # 모델 다운로드 / CPU 안내 로그가 찍히지 않게 조용히 로드
+    sink = io.StringIO()
+    with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+        import easyocr
+        return easyocr.Reader(["ko", "en"], gpu=False, verbose=False)
+
+
+def _preprocess(pil_img):
+    pil_img = ImageOps.exif_transpose(pil_img)        # 휴대폰 사진 회전 정보 반영
+    img = np.array(pil_img.convert("RGB"))
+    h, w = img.shape[:2]
+    scale = MAX_SIDE / max(h, w)
+    if scale < 1:
+        img = cv2.resize(img, (int(w * scale), int(h * scale)),
+                         interpolation=cv2.INTER_AREA)
+    return img
+
+
+@st.cache_data(show_spinner=False)
+def run_ocr_bytes(img_bytes, min_conf=0.3):
+    """사진 -> 인식된 글자 리스트 (같은 사진은 한 번만 읽음)"""
+    pil_img = Image.open(io.BytesIO(img_bytes))
+    sink = io.StringIO()
+    with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+        results = load_reader().readtext(_preprocess(pil_img), detail=1, mag_ratio=MAG_RATIO)
+    return [text for _, text, conf in results if conf >= min_conf]
+
+
+# =====================================================================
+# 2. 판별 (사진 글자 <-> 식약처 허가정보)  [A파일]
+# =====================================================================
+STRICT = 90        # 제조사 점수가 이 이상이어야 '확인됨'
+LOOSE = 70         # 제조사 점수가 이 미만이면 '불일치'
 INGR_PASS = 75     # 성분 하나가 '있다'고 인정할 점수
 INGR_RATIO = 0.5   # 성분 중 이 비율 이상 확인되어야 통과
-NAME_PASS = 75     # 제품명이 '있다'고 인정할 점수
+MAKER_REQUIRED = False   # True면 제조사를 못 읽었을 때도 '확인 필요'
 
-COLUMN_MAP = {"Product Name": "약품명", "Active Ingredient": "주성분",
-              "Manufacturer": "제조사", "MTRAL_CC": "코드"}
+COLUMN_MAP = {"Product Name": "약품명", "Active Ingredient": "주성분", "Manufacturer": "제조사"}
 
 
 def norm(s):
     s = re.sub(r"\(주\)|㈜|주식회사", "", str(s))
     return re.sub(r"[^0-9A-Za-z가-힣]", "", s).lower()
-
-
-def normalize(s):
-    return norm(s)
 
 
 def make_key(name):
@@ -404,118 +434,6 @@ def merge_ingr(series):
     return ", ".join(dict.fromkeys(parts))
 
 
-# 허가정보는 영문, 포장지는 한글로 적힌 경우가 많아서 같은 성분으로 봄
-_ALIAS_GROUPS = [
-    ["acetaminophen", "아세트아미노펜", "paracetamol", "파라세타몰"],
-    ["ibuprofen", "이부프로펜"],
-    ["dexibuprofen", "덱시부프로펜"],
-    ["naproxen", "나프록센"],
-    ["aspirin", "아스피린", "acetylsalicylic acid", "아세틸살리실산"],
-    ["caffeine", "카페인", "무수카페인", "caffeine anhydrous"],
-    ["glucose", "포도당", "dextrose", "덱스트로오스"],
-    ["loratadine", "로라타딘"],
-    ["cetirizine", "세티리진"],
-    ["fexofenadine", "펙소페나딘"],
-    ["chlorpheniramine", "클로르페니라민"],
-    ["pseudoephedrine", "슈도에페드린"],
-    ["phenylephrine", "페닐레프린"],
-    ["dextromethorphan", "덱스트로메토르판"],
-    ["guaifenesin", "구아이페네신"],
-    ["famotidine", "파모티딘"],
-    ["omeprazole", "오메프라졸"],
-    ["esomeprazole", "에스오메프라졸"],
-    ["metformin", "메트포르민"],
-    ["amlodipine", "암로디핀"],
-    ["atorvastatin", "아토르바스타틴"],
-    ["rosuvastatin", "로수바스타틴"],
-    ["loperamide", "로페라미드"],
-    ["simethicone", "시메티콘", "시메치콘"],
-    ["magnesium oxide", "산화마그네슘"],
-    ["sodium chloride", "염화나트륨"],
-    ["ascorbic acid", "아스코르브산", "아스코르빈산", "비타민c", "vitamin c"],
-    ["thiamine", "티아민", "비타민b1"],
-    ["riboflavin", "리보플라빈", "비타민b2"],
-    ["pyridoxine", "피리독신", "비타민b6"],
-    ["cyanocobalamin", "시아노코발라민", "비타민b12"],
-    ["tocopherol", "토코페롤", "비타민e"],
-]
-_ALIAS = {}
-for _g in _ALIAS_GROUPS:
-    for _w in _g:
-        _ALIAS[norm(_w)] = _g
-
-_UNIT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:mg|mcg|μg|ug|g|ml|iu|%|밀리그램|그램|㎎|㎖|정|캡슐)", re.I)
-_SALT_RE = re.compile(r"(염산염|황산염|말레산염|나트륨수화물|수화물|무수물|hydrochloride|hcl|sulfate|maleate|sodium)$", re.I)
-_FORM_RE = re.compile(r"(필름코팅정|서방정|장용정|츄어블정|연질캡슐|경질캡슐|캡슐|정|시럽|현탁액|액|산|과립|주사액|주)$")
-
-
-def ingr_candidates(ing):
-    """성분 하나를 비교할 여러 표기: 원래 이름, 괄호 안/밖, 함량 제거, 염 제거, 한/영 이름"""
-    raw = str(ing)
-    no_unit = _UNIT_RE.sub(" ", raw)
-    inner = re.findall(r"\(([^)]*)\)", no_unit)
-    outer = re.sub(r"\([^)]*\)", " ", no_unit)
-    out = []
-    for n in [raw, no_unit, outer] + inner:
-        k = norm(n)
-        if len(k) < 2:
-            continue
-        out.append(k)
-        stripped = _SALT_RE.sub("", k)
-        if len(stripped) >= 2:
-            out.append(stripped)
-        for alias in _ALIAS.get(k, []) + _ALIAS.get(stripped, []):
-            out.append(norm(alias))
-    return list(dict.fromkeys(out))
-
-
-def name_candidates(name):
-    """제품명을 비교할 여러 표기: 원래 이름, 괄호/함량 제거, 제형(정·캡슐 등) 제거"""
-    raw = str(name)
-    no_paren = re.sub(r"\(.*?\)", " ", raw)
-    no_unit = _UNIT_RE.sub(" ", no_paren)
-    out = []
-    for n in [raw, no_paren, no_unit]:
-        k = norm(n)
-        if len(k) >= 2:
-            out.append(k)
-            short = _FORM_RE.sub("", k)
-            if len(short) >= 2:
-                out.append(short)
-    return list(dict.fromkeys(out))
-
-
-def best_match(cands, texts, full):
-    """여러 표기 중 가장 높은 점수와, 사진에서 가장 비슷한 글자 줄"""
-    score = max([match_score(c, texts, full) for c in cands] + [0])
-    best, line = 0, ""
-    for c in cands:
-        for x in texts:
-            if norm(x):
-                s = fuzz.partial_ratio(c, norm(x))
-                if s > best:
-                    best, line = s, x
-    return score, line
-
-
-_CONFUSE = str.maketrans("OoDQIil|SsBZz", "0000111155822")
-
-
-def digit_stream(text):
-    """OCR이 숫자를 문자로 잘못 읽는 경우(O->0, l->1 등)를 보정한 숫자열"""
-    runs = re.findall(r"[0-9OoDQIil|SsBZz]{3,}", text)
-    good = [r for r in runs if sum(ch.isdigit() for ch in r) >= len(r) / 2]
-    return "".join(r.translate(_CONFUSE) for r in good)
-
-
-def has_code(code):
-    """품목기준코드가 비었거나 null 계열이면 False"""
-    return str(code).strip().lower() not in ("", "nan", "null", "none", "-", "0")
-
-
-# =========================================================
-# 데이터 (A파일 load_db)
-# =========================================================
 @st.cache_data(show_spinner=False)
 def load_db(path="drugs.csv"):
     df = None
@@ -529,26 +447,11 @@ def load_db(path="drugs.csv"):
         raise ValueError("drugs.csv 인코딩을 읽을 수 없습니다.")
     df.columns = df.columns.str.strip()
     df = df.rename(columns=COLUMN_MAP)
-    if "코드" not in df.columns:
-        df["코드"] = ""
-    df = df[["약품명", "주성분", "제조사", "코드"]]
-    for c in df.columns:
-        df[c] = df[c].astype(str).str.strip()
-    df["코드"] = df["코드"].str.replace(r"\.0$", "", regex=True)
-    df = df.groupby(["약품명", "제조사"], as_index=False).agg({"주성분": merge_ingr, "코드": "first"})
+    df = df[["약품명", "주성분", "제조사"]]
+    df = df.groupby(["약품명", "제조사"], as_index=False)["주성분"].agg(merge_ingr)
     df["검색키"] = df["약품명"].map(make_key)
     df = df[df["검색키"].str.len() >= 2].reset_index(drop=True)
     return df
-
-
-try:
-    DF = load_db()
-except Exception as e:
-    st.markdown(
-        '<div class="err">drugs.csv 파일을 불러오지 못했습니다.<br>' + esc(str(e)) + "</div>",
-        unsafe_allow_html=True,
-    )
-    st.stop()
 
 
 def search_names(query, db, limit=5):
@@ -561,7 +464,57 @@ def search_names(query, db, limit=5):
     return [(i, db.at[i, "약품명"], db.at[i, "제조사"]) for _, _, i in res]
 
 
-def search_df(keyword, db):
+def find_other_company(full, db, expected):
+    """포장지에 '허가 제조사가 아닌' 다른 제약사 이름이 적혀 있는지"""
+    exp = norm(expected)
+    for c in db["제조사"].unique():
+        n = norm(c)
+        if len(n) >= 4 and n != exp and n in full:
+            return c
+    return None
+
+
+def verify(texts, db, idx):
+    """사용자가 고른 약(idx)과 사진 속 글자(texts)를 비교"""
+    full = norm(" ".join(texts))
+    if len(full) < 2:
+        return {"status": "error",
+                "message": "사진에서 글자를 인식하지 못했어요. 더 밝고 선명한 사진을 올려주세요."}
+
+    row = db.iloc[idx]
+    entp_score = match_score(row["제조사"], texts, full)
+    maker_ok = entp_score >= STRICT
+    other = None if maker_ok else find_other_company(full, db, row["제조사"])
+
+    ingrs = [i.strip() for i in str(row["주성분"]).split(",") if i.strip()]
+    hit = sum(match_score(i, texts, full) >= INGR_PASS for i in ingrs)
+    ingr_ratio = hit / len(ingrs) if ingrs else 0
+
+    if maker_ok:
+        maker_status = "확인됨"
+    elif other and entp_score < LOOSE:
+        maker_status = f"다른 제조사 발견 ({other})"
+    else:
+        maker_status = "사진에서 찾지 못함"
+    detail = {"제조사 확인": maker_status}
+
+    if other and entp_score < LOOSE:
+        return {"status": "fake", "detail": detail,
+                "message": f"포장지에 허가 제조사가 아닌 '{other}'이(가) 적혀 있어요. 위조 의심!"}
+    if ingr_ratio < INGR_RATIO:
+        return {"status": "warning", "detail": detail,
+                "message": "주성분 표기가 허가정보와 일치하지 않아요. 성분이 적힌 부분을 가까이서 다시 찍어주세요."}
+    if MAKER_REQUIRED and not maker_ok:
+        return {"status": "warning", "detail": detail,
+                "message": "제조사 표기를 확인하지 못했어요. 제조사가 적힌 부분을 가까이서 선명하게 다시 찍어주세요."}
+    if maker_ok:
+        msg = "제조사와 주성분이 식약처 허가정보와 일치해요. 정품일 가능성이 높아요."
+    else:
+        msg = "주성분이 식약처 허가정보와 일치해요. (제조사 표기는 사진에서 확인되지 않았어요)"
+    return {"status": "genuine", "detail": detail, "message": msg}
+
+
+def search_drugs(keyword, db):
     """약품명 또는 성분명으로 검색 (이름이 앞부분부터 맞는 약을 먼저)"""
     q = norm(keyword)
     if not q:
@@ -576,134 +529,47 @@ def search_df(keyword, db):
     return res.assign(_o=order).sort_values("_o").drop(columns="_o")
 
 
-def to_rec(idx):
-    idx = int(idx)
-    return {"idx": idx, "name": DF.at[idx, "약품명"], "ingredient": DF.at[idx, "주성분"],
-            "manufacturer": DF.at[idx, "제조사"], "code": DF.at[idx, "코드"]}
+# =====================================================================
+# 3. 준비
+# =====================================================================
+with st.spinner("AI 엔진 준비 중..."):
+    load_reader()
 
+try:
+    db = load_db()
+except Exception as e:
+    st.markdown('<div class="err">drugs.csv 파일을 불러오지 못했습니다.<br>' + esc(str(e)) + "</div>",
+                unsafe_allow_html=True)
+    st.stop()
 
-def search_drugs(q, limit=50):
-    matched = search_df(q, DF)
-    return [to_rec(i) for i in matched.head(limit).index], len(matched)
+FOOTER = ("© 2026 Jinzzayak. 포장지 표기를 식약처 허가정보와 대조한 참고용 결과이며, "
+          "복용 전 최종 확인은 약사와 상담하세요.")
 
+VERDICT = {
+    "genuine": ("정품 (GENUINE)", "ok"),
+    "fake": ("가품 의심 (COUNTERFEIT)", "bad"),
+    "warning": ("확인 필요 (CHECK)", "warn"),
+    "error": ("인식 실패 (RETRY)", "warn"),
+}
+WARN_STYLE = ' style="color:#FF9500"'   # B CSS에 없는 '확인 필요' 주황색만 인라인으로
 
-# =========================================================
-# OCR (A파일 방식 + 못 읽으면 보정 사진으로 다시 읽기)
-# =========================================================
-MAX_SIDE = 2000   # 사진 최대 크기
-MIN_SIDE = 1600   # 이보다 작으면 키워서 작은 글씨도 읽히게
-MAG_RATIO = 1.0
-MIN_CONF = 0.1    # 한글은 확신도가 낮게 나와도 맞게 읽은 경우가 많음 (오타는 점수로 보정)
-
-
-@st.cache_resource(show_spinner=False)
-def get_ocr_reader():
-    sink = io.StringIO()
-    with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
-        import easyocr
-        return easyocr.Reader(["ko", "en"], gpu=False, verbose=False)
-
-
-def preprocess(pil_img, variant):
-    """variant 0: 원본(크기만 맞춤) / 1: 대비·선명도 보정 / 2: 그림자 제거 + 흑백"""
-    pil_img = ImageOps.exif_transpose(pil_img)
-    img = np.array(pil_img.convert("RGB"))
-    h, w = img.shape[:2]
-    long_side = max(h, w)
-    if long_side > MAX_SIDE:
-        scale = MAX_SIDE / long_side
-        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-    elif long_side < MIN_SIDE:
-        scale = MIN_SIDE / long_side
-        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
-    if variant == 0:
-        return img
-
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    if variant == 1:
-        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)).apply(gray)
-        den = cv2.fastNlMeansDenoising(clahe, h=7)
-        blur = cv2.GaussianBlur(den, (0, 0), 1.2)
-        return cv2.addWeighted(den, 1.6, blur, -0.6, 0)
-
-    bg = cv2.morphologyEx(gray, cv2.MORPH_CLOSE,
-                          cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
-    flat = cv2.divide(gray, bg, scale=255)
-    _, binar = cv2.threshold(flat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return binar
-
-
-@st.cache_data(show_spinner=False, max_entries=64)
-def ocr_pass(data, variant, precise, rotate):
-    reader = get_ocr_reader()
-    kw = dict(detail=1, mag_ratio=MAG_RATIO, paragraph=False,
-              text_threshold=0.6, low_text=0.3, contrast_ths=0.1, adjust_contrast=0.6)
-    if variant >= 1 and precise:
-        kw.update(decoder="beamsearch", beamWidth=5)
-    if rotate or variant == 2:
-        kw["rotation_info"] = [90, 270]
-    img = preprocess(Image.open(io.BytesIO(data)), variant)
-    out = []
-    sink = io.StringIO()
-    with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
-        for _, text, conf in reader.readtext(img, **kw):
-            text = text.strip()
-            if norm(text) and conf >= MIN_CONF:
-                out.append([text, float(conf)])
-    del img
-    gc.collect()
-    return out
-
-
-def merge_lines(merged, lines):
-    for text, conf in lines:
-        k = normalize(text)
-        if k not in merged or conf > merged[k][1]:
-            merged[k] = [text, conf]
-
-
-def evaluate(drug, lines):
-    """제품명 + 주성분으로 판정 (제조사·코드는 리포트 참고용)"""
-    texts = [t for t, _ in lines]
-    full = norm(" ".join(texts))
-
-    name_sc, _ = best_match(name_candidates(drug["name"]), texts, full)
-    name_ok = name_sc >= NAME_PASS
-
-    per = []
-    ingrs = [i.strip() for i in str(drug["ingredient"]).split(",") if i.strip()]
-    for ing in ingrs:
-        sc, line = best_match(ingr_candidates(ing), texts, full)
-        per.append({"name": ing, "score": sc / 100.0, "found": line if sc >= 60 else ""})
-    n_hit = sum(1 for p in per if p["score"] * 100 >= INGR_PASS)
-    ratio = n_hit / len(per) if per else 0.0
-    ing_ok = bool(per) and ratio >= INGR_RATIO
-
-    m_sc, m_line = best_match([norm(drug["manufacturer"])], texts, full) if norm(drug["manufacturer"]) else (0, "")
-
-    code = re.sub(r"\D", "", drug["code"]) if has_code(drug["code"]) else ""
-    code_ok = len(code) >= 6 and code in digit_stream(" ".join(texts))
-
-    return {
-        "drug": drug, "per": per, "ing_ok": ing_ok, "code_ok": code_ok,
-        "manuf_score": m_sc / 100.0, "manuf_found": m_line if m_sc >= 60 else "",
-        "rate": ratio * 100, "genuine": name_ok and ing_ok,
-        "lines": lines, "time": datetime.now().strftime("%m.%d %H:%M"),
-    }
-
-
-# =========================================================
-# 상태
-# =========================================================
+# =====================================================================
+# 4. 상태
+# =====================================================================
 _DEFAULTS = {
     "page": "home", "prev": "home", "results": None, "total": 0,
     "applied": None, "files": [], "up_n": 0, "hist_n": 0,
-    "history": [], "bookmarks": [], "analyses": [], "result": None,
-    "precise": True, "rotate": False, "err": "",
+    "history": [], "bookmarks": [], "analyses": [], "result": None, "err": "",
 }
 for _k, _v in _DEFAULTS.items():
     if _k not in ss:
         ss[_k] = list(_v) if isinstance(_v, list) else _v
+
+
+def to_rec(idx):
+    idx = int(idx)
+    return {"idx": idx, "name": db.at[idx, "약품명"], "maker": db.at[idx, "제조사"],
+            "ingr": db.at[idx, "주성분"]}
 
 
 def go(page):
@@ -719,8 +585,13 @@ def toggle_menu():
 
 
 def reset_home():
-    ss.applied, ss.results, ss.files, ss.err = None, None, [], ""
+    ss.applied, ss.results, ss.files, ss.err, ss.result = None, None, [], "", None
     ss.q = ""
+    ss.page = "home"
+
+
+def retry_photos():
+    ss.files, ss.err = [], ""
     ss.page = "home"
 
 
@@ -740,7 +611,9 @@ def do_search(query=None):
         return
     ss.applied, ss.files, ss.err = None, [], ""
     ss.history = ([q] + [h for h in ss.history if h != q])[:8]
-    ss.results, ss.total = search_drugs(q)
+    matched = search_drugs(q, db)
+    ss.total = len(matched)
+    ss.results = [to_rec(i) for i in matched.head(10).index]
 
 
 def on_pick_history():
@@ -757,16 +630,16 @@ def apply_drug(rec):
     ss.page = "home"
 
 
-def is_bookmarked(name):
-    return any(b["name"] == name for b in ss.bookmarks)
+def is_bookmarked(rec):
+    return any(b["idx"] == rec["idx"] for b in ss.bookmarks)
 
 
 def toggle_bookmark(rec):
-    if is_bookmarked(rec["name"]):
-        ss.bookmarks = [b for b in ss.bookmarks if b["name"] != rec["name"]]
+    if is_bookmarked(rec):
+        ss.bookmarks = [b for b in ss.bookmarks if b["idx"] != rec["idx"]]
         st.toast("즐겨찾기에서 삭제했습니다")
     else:
-        ss.bookmarks = [rec] + ss.bookmarks
+        ss.bookmarks = ss.bookmarks + [rec]
         st.toast("즐겨찾기에 추가했습니다")
 
 
@@ -779,9 +652,7 @@ def make_thumb(data, size=320):
 
 
 def fmt_size(n):
-    if n < 1024 * 1024:
-        return "%.0f KB" % (n / 1024)
-    return "%.1f MB" % (n / 1024 / 1024)
+    return "%.1f KB" % (n / 1024)
 
 
 def on_upload():
@@ -811,7 +682,7 @@ def remove_file(i):
 
 def start_compare():
     if not ss.files:
-        st.toast("성분표 사진을 먼저 올려주세요")
+        st.toast("포장지 사진을 먼저 올려주세요")
         return
     ss.err = ""
     ss.page = "analyzing"
@@ -822,13 +693,9 @@ def open_result(r):
     ss.page = "result"
 
 
-def set_opt(name):
-    ss[name] = ss["w_" + name]
-
-
-# =========================================================
-# 공통 UI
-# =========================================================
+# =====================================================================
+# 5. 공통 UI
+# =====================================================================
 def topbar(title=None, back=None):
     with st.container(key="topbar"):
         if back:
@@ -838,20 +705,28 @@ def topbar(title=None, back=None):
 
 
 def drug_row(rec, i, prefix):
-    on = is_bookmarked(rec["name"])
+    on = is_bookmarked(rec)
     with st.container(key="row_%s%d" % (prefix, i)):
         c1, c2 = st.columns([7, 1], vertical_alignment="center")
         with c1:
-            st.button(rec["name"], key="res_%s%d" % (prefix, i), on_click=apply_drug, args=(rec,))
+            st.button("%s  ·  %s" % (rec["name"], rec["maker"]), key="res_%s%d" % (prefix, i),
+                      on_click=apply_drug, args=(rec,))
         with c2:
             with st.container(key="bmc%s_%s%d" % ("on" if on else "", prefix, i)):
                 st.button("", icon=":material/bookmark:" if on else ":material/bookmark_border:",
                           key="bm_%s%d" % (prefix, i), on_click=toggle_bookmark, args=(rec,))
 
 
-# =========================================================
-# 화면
-# =========================================================
+def verdict_span(status, size_cls="r-value sm"):
+    text, cls = VERDICT[status]
+    if cls == "warn":
+        return '<span class="%s"%s>%s</span>' % (size_cls, WARN_STYLE, text)
+    return '<span class="%s %s">%s</span>' % (size_cls, cls, text)
+
+
+# =====================================================================
+# 6. 화면
+# =====================================================================
 def page_home():
     topbar()
 
@@ -860,7 +735,7 @@ def page_home():
         with st.form("search_form", border=False):
             c1, c2 = st.columns([5, 1], vertical_alignment="center")
             with c1:
-                st.text_input("약품명", key="q", placeholder="검색할 약품명을 입력하세요",
+                st.text_input("약품명", key="q", placeholder="약품명 또는 성분명을 입력하세요",
                               label_visibility="collapsed")
             with c2:
                 st.form_submit_button("적용됨" if applied else "검색", type="primary", on_click=do_search)
@@ -868,20 +743,27 @@ def page_home():
     if ss.err:
         st.markdown('<div class="err">' + esc(ss.err) + "</div>", unsafe_allow_html=True)
 
-    # 약품 적용 후: 업로드
+    # [상태 B] 약품 선택 후: 업로드
     if applied:
         st.markdown(
             '<div class="applied"><span class="tag">적용되었습니다</span>'
             '<div class="nm">' + esc(applied["name"]) + "</div>"
-            '<div class="meta">주성분 ' + esc(applied["ingredient"] or "-") + "<br>"
-            + esc(applied["manufacturer"] or "-")
-            + (" · 품목기준코드 " + esc(applied["code"]) if has_code(applied["code"]) else "")
-            + "</div></div>",
+            '<div class="meta">제조사 ' + esc(applied["maker"] or "-")
+            + "<br>주성분 " + esc(applied["ingr"] or "-") + "</div></div>",
             unsafe_allow_html=True,
         )
+        c1, c2 = st.columns(2)
+        with c1:
+            st.button("★ 북마크 취소" if is_bookmarked(applied) else "☆ 북마크", key="sel_bm",
+                      on_click=toggle_bookmark, args=(applied,))
+        with c2:
+            st.button("다시 검색", key="sel_reset", on_click=reset_home)
+
         st.markdown(
-            '<div class="sec up"><b>이미지를 업로드하세요</b>'
-            "<small>.jpg .png .jpeg · 최대 %d장</small></div>" % MAX_FILES,
+            '<div class="sec up"><b>이미지를 업로드 하세요</b>'
+            "<small>.jpg .png .jpeg · 최대 %d장</small></div>"
+            '<div class="fine">제조사와 \'원료약품 및 분량\'이 적힌 칸을 글자가 가로로 보이게, '
+            "가까이서 찍으면 정확해요. 여러 장 올릴 수 있어요.</div>" % MAX_FILES,
             unsafe_allow_html=True,
         )
 
@@ -907,33 +789,30 @@ def page_home():
 
         if len(files) < MAX_FILES:
             with st.container(key="upwrap" if files else "upwrap_empty"):
-                st.file_uploader("이미지 업로드", type=["jpg", "jpeg", "png"], accept_multiple_files=True,
+                st.file_uploader("포장지 사진", type=["jpg", "jpeg", "png"], accept_multiple_files=True,
                                  key="uploader_" + str(ss.up_n), on_change=on_upload,
                                  label_visibility="collapsed")
 
-        st.button("성분 비교", key="btn_compare", on_click=start_compare)
+        st.button("성분 비교 및 판정 시작", key="btn_compare", on_click=start_compare)
 
-    # 검색 후: 결과 목록
+    # [상태 A] 검색 후: 결과 목록
     elif ss.results is not None:
         if not ss.results:
             st.markdown(
-                '<div class="notice"><b>약품명이 일치하지 않습니다.</b>약품명을 다시 확인해주세요.</div>',
+                '<div class="notice"><b>식약처 허가 DB에서 일치하는 약품을 찾을 수 없어요.</b>'
+                "약품명을 다시 확인하거나, 미허가 제품일 수 있어요.</div>",
                 unsafe_allow_html=True,
             )
         else:
-            if ss.total > len(ss.results):
-                more = "상위 %d개 표시" % len(ss.results)
-            else:
-                more = "약품을 눌러 적용"
             st.markdown(
-                '<div class="sec"><b>검색된 약품 목록 %d</b><small>%s</small></div>' % (ss.total, more),
+                '<div class="sec"><b>검색된 약품 목록</b><small>총 %d건</small></div>' % ss.total,
                 unsafe_allow_html=True,
             )
             with st.container(border=False, key="reslist"):
                 for i, rec in enumerate(ss.results):
                     drug_row(rec, i, "")
 
-    # 기본: 검색 기록
+    # 검색 전: 검색 기록
     else:
         c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
         with c1:
@@ -945,7 +824,10 @@ def page_home():
             st.pills("검색 기록", ss.history, selection_mode="single", key="hist_" + str(ss.hist_n),
                      on_change=on_pick_history, label_visibility="collapsed")
         else:
-            st.markdown('<div class="empty">최근 검색한 약품이 여기에 표시됩니다.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="empty">검색할 약품명을 입력하고 검색 버튼을 눌러주세요.</div>',
+                        unsafe_allow_html=True)
+
+    st.markdown('<div class="fine">' + FOOTER + "</div>", unsafe_allow_html=True)
 
 
 def page_analyzing():
@@ -966,16 +848,25 @@ def page_analyzing():
 
     result, error = None, ""
     try:
-        merged = {}
-        for variant in ((0, 1, 2) if ss.precise else (0,)):
-            for file in ss.files:
-                merge_lines(merged, ocr_pass(file["data"], variant, ss.precise, ss.rotate))
-            result = evaluate(ss.applied, list(merged.values()))
-            if result["genuine"]:
-                break
+        idx = ss.applied["idx"]
+        texts = []
+        for file in ss.files:
+            texts += run_ocr_bytes(file["data"])
+        res = verify(texts, db, idx)
+
+        full = norm(" ".join(texts))
+        ingrs = [x.strip() for x in str(db.iloc[idx]["주성분"]).split(",") if x.strip()]
+        hits = [(ing, match_score(ing, texts, full) >= INGR_PASS) for ing in ingrs]
+        n_hit = sum(h for _, h in hits)
+        result = {
+            "drug": ss.applied, "texts": texts,
+            "status": res["status"], "message": res["message"], "detail": res.get("detail", {}),
+            "hits": hits, "n_hit": n_hit, "n_ingr": len(ingrs),
+            "ratio": n_hit / len(ingrs) if ingrs else 0,
+            "time": datetime.now().strftime("%m.%d %H:%M"),
+        }
     except Exception as e:
         error = "이미지 분석에 실패했습니다. 다른 사진으로 다시 시도해주세요. (%s)" % e
-    gc.collect()
 
     if error:
         ss.err = error
@@ -994,27 +885,27 @@ def page_result():
         st.rerun()
     topbar(back="home")
 
-    rate = r["rate"]
-    ing_cls = "ok" if r["ing_ok"] else "bad"
-    rate_cls = "ok" if rate >= 80 else "bad"
-    rate_color = "var(--green)" if rate >= 80 else "var(--red)"
-    verdict = "정품 (GENUINE)" if r["genuine"] else "가품 의심 (COUNTERFEIT)"
-    v_cls = "ok" if r["genuine"] else "bad"
+    ratio = r["ratio"]
+    ingr_ok = ratio >= INGR_RATIO
+    ing_cls = "ok" if ingr_ok else "bad"
+    bar_color = "var(--green)" if ingr_ok else "var(--red)"
+    msg_cls = "notice" if r["status"] == "genuine" else "err"
 
     st.markdown(
-        '<div class="r-title">성분 대조 및 판정 결과</div>'
-        '<div class="r-drug">' + esc(r["drug"]["name"]) + "</div>"
+        '<div class="r-title">성분 대조 및 최종 판정 결과</div>'
+        '<div class="r-drug">' + esc(r["drug"]["name"]) + "  ·  " + esc(r["drug"]["maker"]) + "</div>"
         '<div class="r-item"><span class="r-label">주성분 일치 여부</span>'
-        '<span class="r-value ' + ing_cls + '">' + ("일치" if r["ing_ok"] else "불일치") + "</span></div>"
-        '<div class="r-item"><span class="r-label">성분 일치율</span>'
-        '<span class="r-value ' + rate_cls + '">%.1f%%</span>' % rate
-        + '<div class="bar"><i style="width:%.0f%%;background:%s"></i></div></div>' % (min(rate, 100), rate_color)
-        + '<div class="r-item"><span class="r-label">최종 판정</span>'
-        '<span class="r-value sm ' + v_cls + '">' + verdict + "</span></div>",
+        '<span class="r-value ' + ing_cls + '">' + ("일치" if ingr_ok else "불일치") + "</span></div>"
+        '<div class="r-item"><span class="r-label">성분 일치율 (%d/%d개)</span>' % (r["n_hit"], r["n_ingr"])
+        + '<span class="r-value ' + ing_cls + '">%.0f%%</span>' % (ratio * 100)
+        + '<div class="bar"><i style="width:%.0f%%;background:%s"></i></div></div>' % (ratio * 100, bar_color)
+        + '<div class="r-item"><span class="r-label">최종 판정</span>' + verdict_span(r["status"]) + "</div>"
+        + '<div class="' + msg_cls + '">' + esc(r["message"]) + "</div>",
         unsafe_allow_html=True,
     )
 
     st.button("상세 항목별 대조 리포트 확인하기", type="primary", key="btn_report", on_click=go, args=("report",))
+    st.button("다른 사진으로 다시 분석", key="light_retry", on_click=retry_photos)
     st.button("메인화면으로 돌아가기", key="light_home1", on_click=reset_home)
 
 
@@ -1029,25 +920,18 @@ def page_report():
     def tag(ok, yes="일치", no="불일치"):
         return '<span class="%s">%s</span>' % ("ok" if ok else "bad", yes if ok else no)
 
-    rows = []
-    if has_code(d["code"]):
-        rows.append(("품목기준코드", esc(d["code"]),
-                     esc(d["code"]) if r["code_ok"] else "미검출",
-                     tag(r["code_ok"], "일치", "확인 필요")))
-    per_list = r["per"] or [{"name": "-", "score": 0, "found": ""}]
-    for i, p in enumerate(per_list):
-        label = "주성분명" if len(r["per"]) <= 1 else "주성분 %d" % (i + 1)
-        if p["found"]:
-            found = esc(p["found"]) + '<span class="pct">유사도 %.0f%%</span>' % (p["score"] * 100)
-        else:
-            found = "미검출"
-        rows.append((label, esc(p["name"]), found, tag(p["score"] >= 0.8)))
-    rows.append(("제조사", esc(d["manufacturer"] or "-"),
-                 esc(r["manuf_found"]) if r["manuf_found"] else "미검출",
-                 tag(r["manuf_score"] >= 0.8, "일치", "참고")))
-    rows.append(("판정 상태", "기준 규격",
-                 '<span class="ok">✓ 적합</span>' if r["genuine"] else '<span class="bad">✕ 부적합</span>',
-                 tag(r["genuine"], "통과", "경고")))
+    maker_status = r["detail"].get("제조사 확인", "사진에서 찾지 못함")
+    if maker_status.startswith("확인됨"):
+        maker_ocr, maker_res = "검출", tag(True)
+    elif maker_status.startswith("다른"):
+        maker_ocr, maker_res = esc(maker_status), tag(False)
+    else:
+        maker_ocr, maker_res = "미검출", "확인 불가"
+
+    rows = [("제품명", esc(d["name"]), "사용자 선택", tag(True, "확인")),
+            ("제조사", esc(d["maker"] or "-"), maker_ocr, maker_res)]
+    for ing, hit in r["hits"]:
+        rows.append(("주성분", esc(ing), "검출" if hit else "미검출", tag(hit)))
 
     body = "".join(
         '<tr><td class="k">%s</td><td>%s</td><td>%s</td><td>%s</td></tr>' % row for row in rows
@@ -1058,10 +942,15 @@ def page_report():
         '<col style="width:32%"><col style="width:18%"></colgroup>'
         "<thead><tr><th>검증 항목</th><th>기준 DB (정품)</th><th>이미지 OCR 검출값</th><th>검증 결과</th></tr></thead>"
         "<tbody>" + body + "</tbody></table>"
-        '<div class="fine">사진 속 글자 인식(OCR) 결과를 기준 데이터와 비교한 참고용 판정입니다. '
-        "조명·초점에 따라 결과가 달라질 수 있으니, 의심되면 약사 또는 의약품안전나라에서 한 번 더 확인해주세요.</div>",
+        '<div class="fine">' + FOOTER + "</div>",
         unsafe_allow_html=True,
     )
+
+    with st.expander("사진에서 인식된 글자 보기"):
+        if r["texts"]:
+            st.markdown("<br>".join(esc(t) for t in r["texts"]), unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="empty">인식된 글자가 없습니다.</div>', unsafe_allow_html=True)
 
     st.button("메인화면으로 돌아가기", key="light_home2", on_click=reset_home)
 
@@ -1084,10 +973,7 @@ def page_menu():
 def page_favorites():
     topbar("즐겨찾기", back="menu")
     if not ss.bookmarks:
-        st.markdown(
-            '<div class="empty">검색 결과에서 북마크 아이콘을 누르면 여기에 모아볼 수 있어요.</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="empty">북마크된 약품이 없습니다.</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             '<div class="sec"><b>즐겨찾기한 약품 %d</b><small>눌러서 바로 사진 대조</small></div>'
@@ -1101,30 +987,25 @@ def page_favorites():
 
 def page_mymenu():
     topbar("마이메뉴", back="home")
-    st.markdown('<div class="sec"><b>최근 판별 기록</b></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec"><b>최근 판별 이력</b></div>', unsafe_allow_html=True)
     if not ss.analyses:
-        st.markdown('<div class="empty">아직 판별한 기록이 없습니다.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="empty">아직 판별한 이력이 없습니다.</div>', unsafe_allow_html=True)
     for i, r in enumerate(ss.analyses):
-        mark = "정품" if r["genuine"] else "가품 의심"
         with st.container(key="hrow_%d" % i):
-            st.button("%s  ·  %s %.0f%%  ·  %s" % (r["drug"]["name"], mark, r["rate"], r["time"]),
+            st.button("%s  ·  %s  ·  %s" % (r["drug"]["name"], VERDICT[r["status"]][0], r["time"]),
                       key="open_%d" % i, on_click=open_result, args=(r,))
 
 
 def page_settings():
     topbar("설정", back="home")
-    st.markdown('<div class="set-sec">인식</div>', unsafe_allow_html=True)
-    st.toggle("정밀 인식 모드", value=ss.precise, key="w_precise", on_change=set_opt, args=("precise",),
-              help="성분을 못 찾으면 그림자를 지운 사진으로 한 번 더 읽습니다. 끄면 빨라지지만 정확도가 조금 떨어져요.")
-    st.toggle("회전된 사진 보정", value=ss.rotate, key="w_rotate", on_change=set_opt, args=("rotate",),
-              help="옆으로 누운 라벨 사진도 읽도록 회전해서 확인합니다. 시간이 더 걸려요.")
     st.markdown('<div class="set-sec">데이터</div>', unsafe_allow_html=True)
     st.button("검색 기록 삭제", key="clr_h", on_click=clear_list, args=("history",))
     st.button("즐겨찾기 비우기", key="clr_b", on_click=clear_list, args=("bookmarks",))
-    st.button("판별 기록 삭제", key="clr_a", on_click=clear_list, args=("analyses",))
+    st.button("판별 이력 삭제", key="clr_a", on_click=clear_list, args=("analyses",))
+    st.markdown('<div class="set-sec">앱 정보</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="fine">등록 약품 %s건 · 식약처 표준 데이터 기반<br>'
-        "기록과 즐겨찾기는 이 브라우저 세션 동안만 유지됩니다.</div>" % format(len(DF), ","),
+        '<div class="fine">진짜약 (Jinzzayak) v1.0.0<br>등록 약품 %s건 · 식약처 허가정보 기반<br>'
+        "기록과 즐겨찾기는 이 브라우저 세션 동안만 유지됩니다.</div>" % format(len(db), ","),
         unsafe_allow_html=True,
     )
 
