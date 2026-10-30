@@ -27,9 +27,9 @@ except Exception as e:
 def load_drug_data():
     try:
         # 파일 인코딩에 따라 utf-8 또는 cp949(euc-kr) 지정 필요할 수 있음
-        df = pd.read_csv('drug.csv', encoding='utf-8')
+        df = pd.read_csv('drugs.csv', encoding='utf-8')
     except UnicodeDecodeError:
-        df = pd.read_csv('drug.csv', encoding='cp949')
+        df = pd.read_csv('drugs.csv', encoding='cp949')
     return df
 
 try:
