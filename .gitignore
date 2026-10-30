@@ -1,0 +1,8 @@
+.venv/
+.cache/
+.runtime/
+.planning/
+__pycache__/
+*.py[cod]
+.env
+.DS_Store

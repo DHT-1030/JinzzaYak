@@ -1,16 +1,13 @@
-# -*- coding: utf-8 -*-
-"""
-진짜약 (Jinzzayak) - 기능: A파일 / 디자인(CSS): B파일
-requirements: streamlit>=1.40, easyocr, rapidfuzz, opencv-python-headless, pillow, pandas, numpy
-"""
 import base64
 import contextlib
 import html
 import io
 import logging
+import os
 import re
 import warnings
 from datetime import datetime
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -33,9 +30,7 @@ ss = st.session_state
 esc = html.escape
 MAX_FILES = 6
 
-# =========================================================
-# 스타일 (B파일 CSS 그대로)
-# =========================================================
+
 CSS = """
 <style>
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
@@ -50,12 +45,12 @@ html, body, .stApp, p, div, label, input, textarea, button, table, td, th {
   letter-spacing:-0.01em;
 }
 
-/* Streamlit 기본 UI 숨김 */
+
 header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
 [data-testid="stStatusWidget"], #MainMenu, footer, .stDeployButton,
 [data-testid="InputInstructions"], [data-testid="stElementToolbar"] { display:none !important; }
 
-/* 폰 프레임 */
+
 .stApp { background:#E9ECEF; }
 .block-container, [data-testid="stMainBlockContainer"]{
   max-width:440px !important; padding:0 20px 100px !important;
@@ -64,11 +59,11 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 @media (max-width:480px){ .stApp{ background:#fff; } }
 [data-testid="stVerticalBlock"]{ gap:0.6rem; }
 
-/* 모바일에서도 컬럼이 줄바꿈되지 않게 */
+
 [data-testid="stHorizontalBlock"]{ flex-wrap:nowrap !important; gap:8px !important; }
 [data-testid="stColumn"], [data-testid="column"]{ min-width:0 !important; }
 
-/* 버튼 공통 */
+
 .stButton, .stFormSubmitButton{ width:100%; }
 .stButton > button, .stFormSubmitButton > button{
   width:100%; min-height:50px; border-radius:12px;
@@ -85,25 +80,25 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   background:var(--red-d) !important; color:#fff !important;
 }
 
-/* 검색 폼 전체 영역 */
+
 [data-testid="stForm"]{
     border: none !important;
     padding: 0 !important;
 }
 
-/* 검색창과 버튼을 감싸는 블록: 간격(gap) 조절 가능 */
+
 .st-key-searchrow [data-testid="stHorizontalBlock"]{
     display: flex !important;
     align-items: center !important;
-    gap: 12px !important; /* 회색박스와 빨간버튼 사이 간격 */
+    gap: 12px !important;
 }
 
-/* 회색 입력창(텍스트박스) 길이와 높이 맞춤 */
+
 .stTextInput {
     width: 100% !important;
 }
 .stTextInput [data-baseweb="input"]{
-    height: 46px !important; /* 위아래 높이를 슬림하게 조절 */
+    height: 46px !important;
     border: 1.5px solid var(--line) !important;
     border-radius: 12px !important;
     background: #fff !important;
@@ -124,12 +119,12 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .stTextInput input::placeholder{ color: #B0B8C1 !important; }
 
-/* 오른쪽 빨간색 검색 버튼: 회색 박스와 높이(46px)를 정확히 일치시킴 */
+
 .st-key-searchrow .stFormSubmitButton {
     width: auto !important;
 }
 .st-key-searchrow .stFormSubmitButton > button{
-    width: 65px !important; /* 버튼 가로 폭 */
+    width: 65px !important;
     min-height: 35px !important;
     height: 46px !important;
     border-radius: 12px !important;
@@ -147,7 +142,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
     background: var(--red-d) !important;
 }
 
-/* 상단바: 아이콘과 글씨를 한 버튼에 넣어 정렬 */
+
 .st-key-topbar{ position:sticky; top:0; z-index:50; background:#fff; padding:10px 0 6px; }
 .st-key-topbar .stButton{ width:auto; }
 .st-key-topbar .stButton > button{
@@ -159,7 +154,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .st-key-topbar button p{ font-size:21px; font-weight:800; color:var(--ink); letter-spacing:-0.03em; line-height:1; margin:0; }
 .st-key-tb_back button p{ font-size:18px; font-weight:700; }
 
-/* 섹션 */
+
 .sec{ display:flex; justify-content:space-between; align-items:baseline; margin:12px 0 0; }
 .sec b{ font-size:15px; font-weight:700; color:var(--ink); }
 .sec small{ font-size:12px; color:var(--mute); }
@@ -172,15 +167,14 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .notice b{ color:var(--ink); display:block; font-size:16px; margin-bottom:4px; }
 .err{ background:#FFF1F1; color:var(--red-d); border-radius:12px; padding:12px 14px; font-size:14px; }
 
-/* 검색 기록 */
+
 [data-testid="stButtonGroup"] button{ border-radius:999px !important; font-size:14px; }
 .st-key-hist_clear .stButton > button{
   min-height:28px; border:none; background:transparent; color:var(--mute);
   font-size:13px; font-weight:500; justify-content:flex-end; padding:0;
 }
 
-/* 약품 목록 (위쪽 간격을 줘서 아래로 내림) */
-/* 검색된 약품 목록: 내용물 크기에 맞게 자동으로 줄어들도록 수정 */
+
 .st-key-reslist{
     background: var(--bg);
     border-radius: 14px;
@@ -215,14 +209,14 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 [class*="st-key-bm_"] [data-testid="stIconMaterial"]{ font-size:22px; color:#B0B8C1; }
 [class*="st-key-bmcon_"] [data-testid="stIconMaterial"]{ color:var(--red) !important; }
 
-/* 적용된 약품 카드 */
+
 .applied{ background:var(--soft); border:1px solid var(--line); border-radius:14px; padding:12px 14px; }
 .applied .tag{ display:inline-block; font-size:11px; font-weight:700; color:var(--red);
   background:#FFECEC; border-radius:6px; padding:2px 7px; margin-bottom:5px; }
 .applied .nm{ font-size:16px; font-weight:700; color:var(--ink); line-height:1.4; }
 .applied .meta{ font-size:12.5px; color:var(--mute); margin-top:2px; line-height:1.5; }
 
-/* 업로드 박스 */
+
 [class*="st-key-upwrap"]{ margin-top:4px; }
 .st-key-upwrap{ margin-top:12px; }
 [class*="st-key-upwrap"] [data-testid="stFileUploaderDropzone"]{
@@ -240,7 +234,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 [class*="st-key-upwrap"] [data-testid="stFileUploaderFile"],
 [class*="st-key-upwrap"] [data-testid="stFileUploaderPagination"]{ display:none; }
 
-/* 업로드된 사진 (작게, X는 우측 상단) */
+
 [class*="st-key-chip_"]{ position:relative; gap:0 !important; }
 .chip img{ width:100%; aspect-ratio:1; object-fit:cover; display:block;
   border-radius:10px; border:1px solid var(--line); background:var(--bg); }
@@ -255,7 +249,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 [class*="st-key-rm_"] [data-testid="stIconMaterial"]{ font-size:14px; color:#fff; }
 
-/* 성분 비교 (빨간 테두리, 조금 더 짧게) */
+
 .st-key-btn_compare{ margin-top:6px; }
 .st-key-btn_compare, .st-key-btn_compare .stButton{ width:100% !important; display:flex; justify-content:center; }
 .st-key-btn_compare .stButton > button{
@@ -264,7 +258,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .st-key-btn_compare button p{ white-space:nowrap; }
 
-/* 분석 중 */
+
 .analyzing{ min-height:calc(100dvh - 40px); display:flex; flex-direction:column;
   align-items:center; justify-content:center; text-align:center; }
 .scanbox{ position:relative; width:200px; height:200px; border-radius:22px; overflow:hidden;
@@ -283,7 +277,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 @keyframes d3{ 0%,70%{opacity:0} 75%,100%{opacity:1} }
 .an-s{ color:var(--mute); font-size:13px; margin-top:6px; line-height:1.6; }
 
-/* 결과 */
+
 .r-title{ font-size:25px; font-weight:800; color:var(--ink); letter-spacing:-0.035em; margin:6px 0 4px; }
 .r-drug{ color:var(--mute); font-size:14px; margin-bottom:6px; }
 .r-item{ padding:18px 0; border-bottom:1px solid var(--line); }
@@ -298,7 +292,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   background:var(--bg) !important; border:none !important; color:var(--sub) !important; font-weight:500;
 }
 
-/* 리포트 표 */
+
 .rpt-h{ font-size:22px; font-weight:800; color:var(--ink); letter-spacing:-0.03em; margin:4px 0 12px; }
 .rpt{ width:100%; border-collapse:separate; border-spacing:0; border:1px solid var(--line);
   border-radius:12px; overflow:hidden; font-size:13px; table-layout:fixed; }
@@ -308,7 +302,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .rpt .pct{ display:block; font-size:11px; color:var(--mute); margin-top:2px; }
 .fine{ font-size:12px; color:var(--mute); line-height:1.6; margin-top:6px; }
 
-/* 메뉴 화면 */
+
 .st-key-drawer{ animation:fadein .2s ease-out; }
 @keyframes fadein{ from{ opacity:0; margin-left:-16px } to{ opacity:1; margin-left:0 } }
 .st-key-drawer [class*="st-key-dr_"] .stButton > button{
@@ -318,7 +312,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .st-key-drawer [class*="st-key-dr_"] button > div{ justify-content:flex-start; gap:10px; }
 .st-key-drawer [class*="st-key-dr_"] [data-testid="stIconMaterial"]{ font-size:22px; color:var(--sub); }
 
-/* 메뉴 하단 고정: 마이메뉴(왼쪽) / 설정(오른쪽) */
+
 .st-key-drawer_bottom{
   position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:440px;
   background:#fff; border-top:1px solid var(--line);
@@ -330,11 +324,11 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .st-key-db_my .stButton > button, .st-key-db_my button > div{ justify-content:flex-start; }
 .st-key-db_set .stButton > button, .st-key-db_set button > div{ justify-content:flex-end; }
 
-/* 설정 */
+
 .set-sec{ font-size:13px; color:var(--mute); font-weight:600; margin:18px 0 2px; }
 .stToggle label p{ font-size:15px; color:var(--ink); }
 
-/* 결과 화면 버튼 우측 정렬 및 크기 조절 */
+
 .st-key-btn_report,
 [class*="st-key-light_"] {
     display: flex !important;
@@ -353,31 +347,31 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 [class*="st-key-light_"] .stButton > button {
     margin-left: auto !important;
     margin-right: 0 !important;
-    width: 240px !important; /* 👈 버튼의 가로 길이를 원하시는 크기로 조절하세요 */
+    width: 240px !important;
 }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
 
-# =====================================================================
-# 1. OCR (사진 -> 글자)  [A파일]
-# =====================================================================
-MAX_SIDE = 2000   # 사진 최대 크기 (클수록 작은 글씨를 잘 읽지만 느려짐)
-MAG_RATIO = 1.0   # 확대 비율
+MAX_SIDE = 2000
+MAG_RATIO = 1.0
 
 
 @st.cache_resource(show_spinner=False)
 def load_reader():
-    # 모델 다운로드 / CPU 안내 로그가 찍히지 않게 조용히 로드
+
     sink = io.StringIO()
     with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+        import torch
         import easyocr
-        return easyocr.Reader(["ko", "en"], gpu=False, verbose=False)
+        torch.set_num_threads(4)
+        model_dir = os.getenv("JINZZAYAK_OCR_MODELS", str(Path(__file__).parent / ".cache" / "easyocr"))
+        return easyocr.Reader(["ko", "en"], gpu=False, verbose=False, model_storage_directory=model_dir)
 
 
 def _preprocess(pil_img):
-    pil_img = ImageOps.exif_transpose(pil_img)        # 휴대폰 사진 회전 정보 반영
+    pil_img = ImageOps.exif_transpose(pil_img)
     img = np.array(pil_img.convert("RGB"))
     h, w = img.shape[:2]
     scale = MAX_SIDE / max(h, w)
@@ -389,7 +383,7 @@ def _preprocess(pil_img):
 
 @st.cache_data(show_spinner=False)
 def run_ocr_bytes(img_bytes, min_conf=0.3):
-    """사진 -> 인식된 글자 리스트 (같은 사진은 한 번만 읽음)"""
+
     pil_img = Image.open(io.BytesIO(img_bytes))
     sink = io.StringIO()
     with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
@@ -397,14 +391,11 @@ def run_ocr_bytes(img_bytes, min_conf=0.3):
     return [text for _, text, conf in results if conf >= min_conf]
 
 
-# =====================================================================
-# 2. 판별 (사진 글자 <-> 식약처 허가정보)  [A파일]
-# =====================================================================
-STRICT = 90        # 제조사 점수가 이 이상이어야 '확인됨'
-LOOSE = 70         # 제조사 점수가 이 미만이면 '불일치'
-INGR_PASS = 75     # 성분 하나가 '있다'고 인정할 점수
-INGR_RATIO = 0.5   # 성분 중 이 비율 이상 확인되어야 통과
-MAKER_REQUIRED = False   # True면 제조사를 못 읽었을 때도 '확인 필요'
+STRICT = 90
+LOOSE = 70
+INGR_PASS = 75
+INGR_RATIO = 0.5
+MAKER_REQUIRED = False
 
 COLUMN_MAP = {"Product Name": "약품명", "Active Ingredient": "주성분", "Manufacturer": "제조사"}
 
@@ -419,7 +410,7 @@ def make_key(name):
 
 
 def match_score(target, texts, full):
-    """OCR 오타를 고려해서 target이 사진 속 글자에 있는지 점수(0~100)"""
+
     t = norm(target)
     if not t:
         return 0
@@ -436,6 +427,7 @@ def merge_ingr(series):
 
 @st.cache_data(show_spinner=False)
 def load_db(path="drugs.csv"):
+    path = Path(__file__).resolve().parent / path
     df = None
     for enc in ["utf-8-sig", "cp949"]:
         try:
@@ -455,7 +447,7 @@ def load_db(path="drugs.csv"):
 
 
 def search_names(query, db, limit=5):
-    """오타가 있어도 비슷한 약 이름 찾기"""
+
     q = make_key(query)
     if not q:
         return []
@@ -465,7 +457,7 @@ def search_names(query, db, limit=5):
 
 
 def find_other_company(full, db, expected):
-    """포장지에 '허가 제조사가 아닌' 다른 제약사 이름이 적혀 있는지"""
+
     exp = norm(expected)
     for c in db["제조사"].unique():
         n = norm(c)
@@ -475,7 +467,7 @@ def find_other_company(full, db, expected):
 
 
 def verify(texts, db, idx):
-    """사용자가 고른 약(idx)과 사진 속 글자(texts)를 비교"""
+
     full = norm(" ".join(texts))
     if len(full) < 2:
         return {"status": "error",
@@ -500,22 +492,22 @@ def verify(texts, db, idx):
 
     if other and entp_score < LOOSE:
         return {"status": "fake", "detail": detail,
-                "message": f"포장지에 허가 제조사가 아닌 '{other}'이(가) 적혀 있어요. 위조 의심!"}
+                "message": f"사진에서 등록 제조사와 다른 '{other}' 표기를 찾았어요. 제조사·판매사 표시를 다시 확인해 주세요. 위조 여부를 뜻하지 않습니다."}
     if ingr_ratio < INGR_RATIO:
         return {"status": "warning", "detail": detail,
-                "message": "주성분 표기가 허가정보와 일치하지 않아요. 성분이 적힌 부분을 가까이서 다시 찍어주세요."}
+                "message": "등록된 주성분 이름을 충분히 읽지 못했어요. 성분 표시 전체를 선명하게 다시 찍어주세요. 실제 성분 누락을 뜻하지 않습니다."}
     if MAKER_REQUIRED and not maker_ok:
         return {"status": "warning", "detail": detail,
                 "message": "제조사 표기를 확인하지 못했어요. 제조사가 적힌 부분을 가까이서 선명하게 다시 찍어주세요."}
     if maker_ok:
-        msg = "제조사와 주성분이 식약처 허가정보와 일치해요. 정품일 가능성이 높아요."
+        msg = "제조사와 주성분 이름에 유사한 표기를 찾았어요. 원문을 확인해 주세요. 사진만으로 정품 여부나 실제 내용물을 확인할 수 없습니다."
     else:
-        msg = "주성분이 식약처 허가정보와 일치해요. (제조사 표기는 사진에서 확인되지 않았어요)"
+        msg = "등록된 주성분 이름에 유사한 표기를 찾았어요. 제조사 표기는 확인되지 않았습니다. 정품 인증이나 복용 가능 판정이 아닙니다."
     return {"status": "genuine", "detail": detail, "message": msg}
 
 
 def search_drugs(keyword, db):
-    """약품명 또는 성분명으로 검색 (이름이 앞부분부터 맞는 약을 먼저)"""
+
     q = norm(keyword)
     if not q:
         return db.iloc[0:0]
@@ -529,9 +521,6 @@ def search_drugs(keyword, db):
     return res.assign(_o=order).sort_values("_o").drop(columns="_o")
 
 
-# =====================================================================
-# 3. 준비
-# =====================================================================
 with st.spinner("AI 엔진 준비 중..."):
     load_reader()
 
@@ -542,20 +531,18 @@ except Exception as e:
                 unsafe_allow_html=True)
     st.stop()
 
-FOOTER = ("© 2026 Jinzzayak. 포장지 표기를 식약처 허가정보와 대조한 참고용 결과이며, "
-          "복용 전 최종 확인은 약사와 상담하세요.")
+FOOTER = ("© 2026 Jinzzayak · 로컬 테스트. 저장소 제공 CSV와 포장지 글자를 비교합니다. "
+          "데이터 출처·갱신일은 검증 전이며, 결과는 정품 인증이나 복용 판단이 아닙니다.")
 
 VERDICT = {
-    "genuine": ("정품 (GENUINE)", "ok"),
-    "fake": ("가품 의심 (COUNTERFEIT)", "bad"),
+    "genuine": ("유사 표기 검출 (MATCH)", "ok"),
+    "fake": ("제조사 표기 확인 필요", "warn"),
     "warning": ("확인 필요 (CHECK)", "warn"),
     "error": ("인식 실패 (RETRY)", "warn"),
 }
-WARN_STYLE = ' style="color:#FF9500"'   # B CSS에 없는 '확인 필요' 주황색만 인라인으로
+WARN_STYLE = ' style="color:#FF9500"'
 
-# =====================================================================
-# 4. 상태
-# =====================================================================
+
 _DEFAULTS = {
     "page": "home", "prev": "home", "results": None, "total": 0,
     "applied": None, "files": [], "up_n": 0, "hist_n": 0,
@@ -693,9 +680,6 @@ def open_result(r):
     ss.page = "result"
 
 
-# =====================================================================
-# 5. 공통 UI
-# =====================================================================
 def topbar(title=None, back=None):
     with st.container(key="topbar"):
         if back:
@@ -724,9 +708,6 @@ def verdict_span(status, size_cls="r-value sm"):
     return '<span class="%s %s">%s</span>' % (size_cls, cls, text)
 
 
-# =====================================================================
-# 6. 화면
-# =====================================================================
 def page_home():
     topbar()
 
@@ -743,7 +724,7 @@ def page_home():
     if ss.err:
         st.markdown('<div class="err">' + esc(ss.err) + "</div>", unsafe_allow_html=True)
 
-    # [상태 B] 약품 선택 후: 업로드
+
     if applied:
         st.markdown(
             '<div class="applied"><span class="tag">적용되었습니다</span>'
@@ -795,12 +776,12 @@ def page_home():
 
         st.button("성분 비교 및 판정 시작", key="btn_compare", on_click=start_compare)
 
-    # [상태 A] 검색 후: 결과 목록
+
     elif ss.results is not None:
         if not ss.results:
             st.markdown(
-                '<div class="notice"><b>식약처 허가 DB에서 일치하는 약품을 찾을 수 없어요.</b>'
-                "약품명을 다시 확인하거나, 미허가 제품일 수 있어요.</div>",
+                '<div class="notice"><b>등록된 CSV에서 약품을 찾지 못했어요.</b>'
+                "다른 검색어로 찾아보세요. 검색 결과가 없다는 것이 미허가 제품을 뜻하지는 않습니다.</div>",
                 unsafe_allow_html=True,
             )
         else:
@@ -812,7 +793,7 @@ def page_home():
                 for i, rec in enumerate(ss.results):
                     drug_row(rec, i, "")
 
-    # 검색 전: 검색 기록
+
     else:
         c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
         with c1:
@@ -892,14 +873,14 @@ def page_result():
     msg_cls = "notice" if r["status"] == "genuine" else "err"
 
     st.markdown(
-        '<div class="r-title">성분 대조 및 최종 판정 결과</div>'
+        '<div class="r-title">성분표 글자 비교 결과</div>'
         '<div class="r-drug">' + esc(r["drug"]["name"]) + "  ·  " + esc(r["drug"]["maker"]) + "</div>"
-        '<div class="r-item"><span class="r-label">주성분 일치 여부</span>'
-        '<span class="r-value ' + ing_cls + '">' + ("일치" if ingr_ok else "불일치") + "</span></div>"
-        '<div class="r-item"><span class="r-label">성분 일치율 (%d/%d개)</span>' % (r["n_hit"], r["n_ingr"])
+        '<div class="r-item"><span class="r-label">주성분 이름 검출</span>'
+        '<span class="r-value ' + ing_cls + '">' + ("유사 표기 검출" if ingr_ok else "재촬영 필요") + "</span></div>"
+        '<div class="r-item"><span class="r-label">성분명 검출률 (%d/%d개)</span>' % (r["n_hit"], r["n_ingr"])
         + '<span class="r-value ' + ing_cls + '">%.0f%%</span>' % (ratio * 100)
         + '<div class="bar"><i style="width:%.0f%%;background:%s"></i></div></div>' % (ratio * 100, bar_color)
-        + '<div class="r-item"><span class="r-label">최종 판정</span>' + verdict_span(r["status"]) + "</div>"
+        + '<div class="r-item"><span class="r-label">표기 비교 상태</span>' + verdict_span(r["status"]) + "</div>"
         + '<div class="' + msg_cls + '">' + esc(r["message"]) + "</div>",
         unsafe_allow_html=True,
     )
@@ -940,7 +921,7 @@ def page_report():
         '<div class="rpt-h">상세 항목별 대조 리포트</div>'
         '<table class="rpt"><colgroup><col style="width:22%"><col style="width:28%">'
         '<col style="width:32%"><col style="width:18%"></colgroup>'
-        "<thead><tr><th>검증 항목</th><th>기준 DB (정품)</th><th>이미지 OCR 검출값</th><th>검증 결과</th></tr></thead>"
+        "<thead><tr><th>비교 항목</th><th>등록 CSV</th><th>이미지 OCR 검출값</th><th>비교 결과</th></tr></thead>"
         "<tbody>" + body + "</tbody></table>"
         '<div class="fine">' + FOOTER + "</div>",
         unsafe_allow_html=True,
@@ -1004,7 +985,7 @@ def page_settings():
     st.button("판별 이력 삭제", key="clr_a", on_click=clear_list, args=("analyses",))
     st.markdown('<div class="set-sec">앱 정보</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="fine">진짜약 (Jinzzayak) v1.0.0<br>등록 약품 %s건 · 식약처 허가정보 기반<br>'
+        '<div class="fine">진짜약 (Jinzzayak) v1.0.0<br>등록 약품 %s건 · 저장소 제공 CSV (출처 검증 전)<br>'
         "기록과 즐겨찾기는 이 브라우저 세션 동안만 유지됩니다.</div>" % format(len(db), ","),
         unsafe_allow_html=True,
     )
